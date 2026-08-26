@@ -1,0 +1,22 @@
+# Environment
+.venv/
+__pycache__/
+*.pyc
+
+# Third-party source, cloned not vendored (see README for the clone command)
+sam3/
+
+# Source recordings
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Generated outputs: re-derivable from the source video via the pipeline.
+# Track data (tracks.csv, masks.npz) is small and arguably worth versioning --
+# un-ignore a specific run with:  git add -f runs/<name>/tracks.csv
+runs/
+figures/
+
+# IDE
+.idea/
