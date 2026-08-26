@@ -53,10 +53,48 @@ uv run render_colors.py runs/full_s3 --fps 20 --trails
 
 ### Outputs
 
-- `tracks.csv` — `frame, src_frame, time_s, obj_id, cx, cy, area_px, score, box_*`
-- `tracks_upsampled.csv` — same, every source frame, plus a `measured` column marking
-  real observations (1) versus interpolated ones (0)
-- `masks.npz` — bit-packed per-frame masks; re-render without re-tracking
+#### `tracks.csv`
+
+One row per object per frame. Rows are omitted where an object's mask is empty, so a
+lost object leaves a gap rather than a zero-area row.
+
+| Column | Units | Meaning |
+|---|---|---|
+| `frame` | index | Position in the **tracked** sequence, `0 … N-1`. This is *not* a video frame number — with `--stride 3`, frame 1 is the fourth frame of the video. |
+| `src_frame` | index | Frame number in the **source video** (`start + frame × stride`). Use this to seek back into the original recording. |
+| `time_s` | seconds | Elapsed time from the start of the recording, `src_frame / source_fps`. |
+| `obj_id` | id | Track identity, stable for the whole recording including across chunk seams. Assigned by the tracker, not a biological identity. |
+| `cx`, `cy` | **pixels** | Mask centroid in image coordinates: origin top-left, `y` increasing **downward**. |
+| `area_px` | pixels | Mask area, i.e. the number of pixels in the mask. |
+| `score` | 0–1 | SAM 3 confidence for that object on that frame. |
+| `box_x`, `box_y` | **normalised 0–1** | **Top-left corner** of the bounding box, as a fraction of frame width and height. |
+| `box_w`, `box_h` | **normalised 0–1** | Box width and height, as fractions of frame width and height. |
+
+> **The units are mixed.** `cx`/`cy`/`area_px` are in pixels; the four `box_*` columns
+> are normalised to 0–1. Multiply the box columns by frame width/height to get pixels —
+> at 1120×1120, `box_x * 1120`. This comes from SAM 3's own output format and is
+> preserved rather than silently converted.
+
+Nothing here is spatially calibrated: distances and areas are in image units. Multiply
+by (arena diameter in mm) / (arena diameter in px) to get millimetres.
+
+#### `tracks_upsampled.csv`
+
+Written by `upsample_tracks.py`. Same columns with two differences: there is **no
+`frame` column** (only `src_frame`, now contiguous), and a `measured` column is added.
+
+| Column | Units | Meaning |
+|---|---|---|
+| `measured` | 0 or 1 | `1` for a real tracked observation, `0` for an interpolated one. With `--stride 3`, one row in three is measured. |
+
+Filter on `measured == 1` for anything that must rest on observations only.
+
+#### `masks.npz`
+
+Bit-packed per-frame masks plus ids, boxes and scores, so a run can be re-rendered
+without re-tracking. Keys are `m{frame}`, `i{frame}`, `b{frame}`, `p{frame}`, plus
+`height`, `width` and `frames`. Unpack with
+`np.unpackbits(z[f"m{i}"], axis=-1)[..., :width]`.
 
 ## Things that cost time to discover
 
