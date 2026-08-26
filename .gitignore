@@ -2,6 +2,7 @@
 .venv/
 __pycache__/
 *.pyc
+*.egg-info/
 
 # Third-party source, cloned not vendored (see README for the clone command)
 sam3/

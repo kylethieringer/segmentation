@@ -1,0 +1,74 @@
+[project]
+name = "fly-arena-segmentation"
+version = "0.1.0"
+description = "Segment and track individual flies in a Drosophila arena recording with SAM 3"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+
+dependencies = [
+    # SAM 3 itself. Pinned by commit: the repo has no releases, and the tracker
+    # API (handle_stream_request, the init_state kwargs) is not yet stable.
+    "sam3",
+    # Torch must come from PyTorch's own CUDA 12.8 index, wired up in
+    # [tool.uv.sources] below -- PyPI's torch is a different build.
+    "torch==2.10.0",
+    "torchvision",
+    # sam3 constrains numpy<2; pinned here too so the conflict surfaces at lock
+    # time rather than as an obscure ABI error at runtime.
+    "numpy>=1.26,<2",
+    "decord>=0.6",        # video decoding (track_video.extract_clip)
+    "opencv-python>=4.9",  # rendering (render_colors)
+    "pillow>=10",          # frame IO
+    "pandas>=2",           # tracks.csv handling (upsample_tracks)
+    "scipy>=1.11",         # linear_sum_assignment, interpolators
+    "scikit-image>=0.22",  # threshold baseline (track_video --no-model)
+    # sam3/model_builder.py does `import pkg_resources`, which setuptools removed
+    # in v81. Without this pin a fresh sync installs setuptools>=81 and every
+    # sam3 import dies with ModuleNotFoundError: No module named 'pkg_resources'.
+    "setuptools<81",
+    # Same story as pkg_resources: sam3/sam/rope.py imports einops on the core
+    # inference path, but sam3 only declares it in its `notebooks` extra.
+    "einops>=0.7",
+    # sam3/visualization_utils.py (which render/track import for save_masklet_video)
+    # pulls all of these in at module level while declaring none of them:
+    "matplotlib>=3.8",
+    "scikit-learn>=1.3",
+    "pycocotools>=2.0",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+# Not needed by the pipeline; kept so the sam3 example notebooks still run
+# with `uv sync --extra dev`.
+dev = [
+    "jupyter",
+    "notebook",
+    "ipywidgets",
+    "ipympl",     # sam3's interactive example notebooks
+    "ipycanvas",
+]
+
+[tool.uv]
+# Torch wheels are large and platform-specific; don't try to build from source.
+no-build-package = ["torch", "torchvision", "decord"]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchvision = { index = "pytorch-cu128" }
+# Installed from git so a fresh checkout works without a manual clone step.
+# To hack on SAM 3 locally instead, replace this with:
+#   sam3 = { path = "sam3", editable = true }
+sam3 = { git = "https://github.com/facebookresearch/sam3.git", rev = "8f0b7f4d4e7eda2ed606ebde6702c93359ad01da" }
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+# Flat layout: the pipeline is top-level scripts, not an importable package.
+py-modules = []

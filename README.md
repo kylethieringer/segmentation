@@ -11,40 +11,37 @@ is species-specific — `--prompt` drives what gets segmented.
 
 ## Setup
 
-Requires an NVIDIA GPU and [uv](https://docs.astral.sh/uv/).
+Requires an NVIDIA GPU (CUDA 12.6+) and [uv](https://docs.astral.sh/uv/). Everything
+else — the Python interpreter, torch, and SAM 3 itself — is resolved from `uv.lock`:
 
 ```bash
-uv venv --python cpython-3.12 --python-preference only-managed
-uv pip install --python .venv/bin/python torch==2.10.0 torchvision \
-    --index-url https://download.pytorch.org/whl/cu128
-
-git clone https://github.com/facebookresearch/sam3.git
-uv pip install --python .venv/bin/python -e "./sam3[notebooks]" pandas
+uv sync                  # the pipeline
+uv sync --extra dev      # ...plus jupyter, for sam3's own example notebooks
 ```
 
-`pandas` is installed explicitly: `sam3/visualization_utils.py` imports it at module
-level but it is only declared in sam3's `dev` extra, so `[notebooks]` alone leaves
-you with an ImportError at render time.
+SAM 3 is installed from a pinned commit rather than vendored, so no manual clone is
+needed. To read or modify its source, clone it and swap the `[tool.uv.sources]` entry
+in `pyproject.toml` for `sam3 = { path = "sam3", editable = true }`.
 
 The checkpoints are gated. Request access to
 [facebook/sam3](https://huggingface.co/facebook/sam3), then:
 
 ```bash
-.venv/bin/hf auth login
+uv run hf auth login
 ```
 
 ## Pipeline
 
 ```bash
 # 1. track (chunked; handles arbitrarily long video)
-.venv/bin/python track_long.py test_video.mp4 --prompt insect --stride 3 \
+uv run track_long.py test_video.mp4 --prompt insect --stride 3 \
     --chunk 450 --overlap 15 --out runs/full_s3
 
 # 2. fill in the frames skipped by --stride
-.venv/bin/python upsample_tracks.py runs/full_s3/tracks.csv --kind pchip
+uv run upsample_tracks.py runs/full_s3/tracks.csv --kind pchip
 
 # 3. render a video, one colour per fly
-.venv/bin/python render_colors.py runs/full_s3 --fps 20 --trails
+uv run render_colors.py runs/full_s3 --fps 20 --trails
 ```
 
 | Script | Does |
@@ -63,6 +60,13 @@ The checkpoints are gated. Request access to
 
 ## Things that cost time to discover
 
+**SAM 3 under-declares its own dependencies.** Its core inference path imports
+`einops`, `pandas`, `matplotlib`, `scikit-learn` and `pycocotools` at module level while
+declaring them only in its `notebooks` extra, or not at all. It also imports
+`pkg_resources`, which setuptools deleted in v81 — so a modern setuptools breaks every
+sam3 import. All of these are pinned explicitly in `pyproject.toml`; the comments there
+say why, so nobody "tidies them up" later.
+
 **Use `--version sam3`, not `sam3.1`.** SAM 3.1 will not fit in 16 GB at this
 resolution, and shortening the clip does not help: the OOM is a fixed ~14.6 GiB
 per-step peak in the detector mask head (byte-identical at 40 and 120 frames). The
@@ -76,11 +80,12 @@ in the video model. `insect` scores 0.94. `ant` finds nothing — a useful negat
 **GPU memory grows with sequence length** even with `--offload-video --offload-state`.
 A single session dies near 500 frames on a 16 GB card; hence chunking.
 
-**Don't run from a directory containing a `sam3/` folder** without care — Python imports
-the clone directory as a namespace package whose `__file__` is `None`, and SAM 3's
-`pkg_resources.resource_filename("sam3", ...)` fails with a confusing
-`expected str ... not NoneType`. The scripts here derive the asset path from
-`model_builder.__file__` instead, which is CWD-independent.
+**A local `sam3/` clone shadows the installed package.** If you clone it into the project
+root, Python imports the clone directory as a namespace package whose `__file__` is
+`None`, and SAM 3's `pkg_resources.resource_filename("sam3", ...)` fails with a confusing
+`expected str ... not NoneType`. Installing from git (the default here) avoids it; the
+scripts also derive the asset path from `model_builder.__file__`, which is CWD-independent
+either way.
 
 **`offload_state_to_cpu` breaks `sam3.1`.** The shared `start_session` forwards it
 unconditionally but the multiplex `init_state` does not accept it. `build_predictor()`
