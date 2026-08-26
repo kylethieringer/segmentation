@@ -43,9 +43,6 @@ The checkpoints are gated. Request access to
 
 # 3. render a video, one colour per fly
 .venv/bin/python render_colors.py runs/full_s3 --fps 20 --trails
-
-# 4. figures + HTML report
-.venv/bin/python make_figures.py && .venv/bin/python build_report.py
 ```
 
 | Script | Does |
@@ -54,8 +51,6 @@ The checkpoints are gated. Request access to
 | `track_long.py` | Chunked tracking with IoU identity stitching across chunk seams. **Use this for real runs.** |
 | `upsample_tracks.py` | Interpolates strided tracks back to every source frame. |
 | `render_colors.py` | Renders `masks.npz` to a video with one stable colour per object. |
-| `make_figures.py` | Trajectory, speed, occupancy and validation figures (light + dark). |
-| `build_report.py` | Assembles the figures into a standalone HTML report. |
 
 ### Outputs
 

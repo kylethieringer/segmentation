@@ -18,5 +18,9 @@ sam3/
 runs/
 figures/
 
+# Local validation only, deliberately untracked
+make_figures.py
+build_report.py
+
 # IDE
 .idea/
