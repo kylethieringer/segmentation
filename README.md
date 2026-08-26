@@ -7,6 +7,8 @@ per-frame centroid trajectories for behavioural analysis.
 Built against a 1120×1120 grayscale, 60 fps arena assay with ~7 flies, but nothing
 is species-specific — `--prompt` drives what gets segmented.
 
+**! code was written with help from claude**
+
 ## Setup
 
 Requires an NVIDIA GPU and [uv](https://docs.astral.sh/uv/).
