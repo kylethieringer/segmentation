@@ -167,22 +167,54 @@ def track(frames_dir: Path, prompt: str, version: str, offload_video: bool,
 
 # ---------------------------------------------------------------- mask persistence
 
-def save_masks(outputs: dict[int, dict], path: Path, frame_shape: tuple[int, int]) -> None:
-    """Persist per-frame masks so re-rendering never requires re-tracking.
+# masks.npz layout version. 1 packed whole frames; 2 packs each object cropped
+# to its bounding box and carries a c{frame} array of (y0, x0, h, w) alongside.
+# Readers must keep handling 1: runs tracked before the change are still v1.
+MASK_FORMAT = 2
 
-    Masks are bit-packed along the last axis before compression: at 1120x1120 a
-    bool array is ~1.25 MB per object per frame, which is wasteful for what is a
-    handful of small blobs on a large empty arena.
+
+def mask_bboxes(masks: np.ndarray) -> np.ndarray:
+    """Tight (y0, x0, h, w) per mask; all-zero for an empty one."""
+    crops = np.zeros((len(masks), 4), dtype=np.int32)
+    for i, m in enumerate(masks):
+        ys, xs = np.nonzero(m)
+        if len(ys):
+            y0, x0 = int(ys.min()), int(xs.min())
+            crops[i] = (y0, x0, int(ys.max()) - y0 + 1, int(xs.max()) - x0 + 1)
+    return crops
+
+
+def pack_cropped(masks: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Bit-pack masks cropped to their bounding boxes -> (packed, crops).
+
+    A full-frame bool mask packs to ~160 KB per object per frame however small
+    the subject is, so a long run piles up tens of GB before it ever reaches
+    savez -- enough to get a 57k-frame run OOM-killed. Cropping first makes the
+    cost proportional to the subject rather than to the arena.
+
+    Objects are padded to the largest box in the frame so the result stays
+    rectangular; each object's true extent is its own row in `crops`.
     """
+    crops = mask_bboxes(masks)
+    mh, mw = (int(crops[:, 2].max()), int(crops[:, 3].max())) if len(crops) else (0, 0)
+    tiles = np.zeros((len(masks), mh, mw), dtype=bool)
+    for i, (y0, x0, h, w) in enumerate(crops.tolist()):
+        if h:
+            tiles[i, :h, :w] = masks[i][y0:y0 + h, x0:x0 + w]
+    return np.packbits(tiles, axis=-1), crops
+
+
+def save_masks(outputs: dict[int, dict], path: Path, frame_shape: tuple[int, int]) -> None:
+    """Persist per-frame masks so re-rendering never requires re-tracking."""
     height, width = frame_shape
     arrays: dict[str, np.ndarray] = {}
     for fidx, out in outputs.items():
         masks = np.asarray(out["out_binary_masks"]).astype(bool)
-        arrays[f"m{fidx}"] = np.packbits(masks, axis=-1)
+        arrays[f"m{fidx}"], arrays[f"c{fidx}"] = pack_cropped(masks)
         arrays[f"i{fidx}"] = np.asarray(out["out_obj_ids"])
         arrays[f"b{fidx}"] = np.asarray(out.get("out_boxes_xywh", np.zeros((len(masks), 4))))
         arrays[f"p{fidx}"] = np.asarray(out.get("out_probs", np.ones(len(masks))))
-    np.savez_compressed(path, height=height, width=width,
+    np.savez_compressed(path, height=height, width=width, format=MASK_FORMAT,
                         frames=np.array(sorted(outputs)), **arrays)
     size_mb = path.stat().st_size / 1e6
     print(f"[masks] {len(outputs)} frames -> {path} ({size_mb:.1f} MB)")

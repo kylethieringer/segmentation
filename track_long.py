@@ -52,6 +52,53 @@ def link_chunk(frames_dir: Path, chunk_dir: Path, lo: int, hi: int) -> None:
         (chunk_dir / f"{local}.jpg").symlink_to((frames_dir / f"{glob_idx}.jpg").resolve())
 
 
+def mask_centroid(m: np.ndarray) -> tuple[float, float]:
+    """(x, y) centre of a boolean mask; (nan, nan) if it is empty."""
+    ys, xs = np.nonzero(m)
+    if not len(ys):
+        return float("nan"), float("nan")
+    return float(xs.mean()), float(ys.mean())
+
+
+def relink(retired: dict[int, tuple[tuple[float, float], int]], unmatched: list[int],
+           new_union: dict[int, np.ndarray], ci: int,
+           max_dist: float, max_age: int) -> dict[int, int]:
+    """Recover ids that vanished for a whole chunk, by centroid proximity.
+
+    IoU cannot do this. A subject gone for one chunk has walked clear of its old
+    mask -- measured at 114 px after 7.2 s, against a ~55 px body -- so the
+    overlap is exactly zero and the tier-1 match can never fire. It would be
+    handed a fresh id, splitting one subject's trajectory in two.
+
+    Guarded against grabbing the wrong subject: a link needs the candidate to be
+    within `max_dist`, and either clearly better than the runner-up or the only
+    possibility on both sides (one missing, one new -- a closed arena with a
+    fixed population makes that case unambiguous).
+    """
+    live = sorted(g for g, (_, seen) in retired.items() if ci - seen <= max_age)
+    if not live or not unmatched:
+        return {}
+
+    cents = {o: mask_centroid(new_union[o]) for o in unmatched}
+    dist = np.array([[float(np.hypot(retired[g][0][0] - cents[o][0],
+                                     retired[g][0][1] - cents[o][1]))
+                      for o in unmatched] for g in live])
+    dist = np.nan_to_num(dist, nan=np.inf)
+
+    out: dict[int, int] = {}
+    rows, cols = linear_sum_assignment(dist)
+    lone = len(live) == 1 and len(unmatched) == 1
+    for r, c in zip(rows, cols):
+        d = dist[r, c]
+        if d > max_dist:
+            continue
+        rivals = [v for k, v in enumerate(dist[r]) if k != c] + \
+                 [v for k, v in enumerate(dist[:, c]) if k != r]
+        if lone or not rivals or d < 0.6 * min(rivals):
+            out[unmatched[c]] = live[r]
+    return out
+
+
 def iou_matrix(prev: dict[int, np.ndarray], new: dict[int, np.ndarray]) -> np.ndarray:
     """Mean IoU between two id->mask-stack mappings accumulated over shared frames.
 
@@ -84,6 +131,10 @@ def main() -> None:
     ap.add_argument("--iou-thresh", type=float, default=0.3,
                     help="minimum overlap IoU to consider two tracks the same object")
     ap.add_argument("--prob-thresh", type=float, default=0.5)
+    ap.add_argument("--relink-dist", type=float, default=200.0,
+                    help="max px a subject may have moved while absent to be relinked")
+    ap.add_argument("--relink-chunks", type=int, default=3,
+                    help="chunks an absent id stays relinkable; 0 disables relinking")
     ap.add_argument("--reuse-frames", action="store_true",
                     help="skip extraction if <out>/frames is already populated")
     args = ap.parse_args()
@@ -123,6 +174,7 @@ def main() -> None:
     written: set[int] = set()          # global frame indices already recorded
     next_gid = 0
     prev_union: dict[int, np.ndarray] = {}   # global id -> mask union over last overlap
+    retired: dict[int, tuple[tuple[float, float], int]] = {}   # gid -> (centroid, chunk last seen)
     chunk_dir = args.out / "_chunk"
     t_all = time.time()
 
@@ -173,6 +225,15 @@ def main() -> None:
                     matched += 1
             print(f"[chunk {ci}] matched {matched}/{len(new_ids)} tracks to previous "
                   f"(best IoU {mat.max():.2f})" if mat.size else f"[chunk {ci}] no overlap")
+
+            # Tier 2: whatever IoU could not place, try against ids that went
+            # missing in an earlier chunk rather than minting a new id for them.
+            regained = relink(retired, [o for o in new_ids if o not in id_map],
+                              new_union, ci, args.relink_dist, args.relink_chunks)
+            for oid, gid in regained.items():
+                id_map[oid] = gid
+                print(f"[chunk {ci}] relinked id {gid} after "
+                      f"{ci - retired[gid][1]} chunk(s) absent")
         for oid in sorted({int(o) for out in local_outputs.values()
                            for o in np.asarray(out["out_obj_ids"]).tolist()}):
             if oid not in id_map:
@@ -192,7 +253,10 @@ def main() -> None:
             probs = np.asarray(out.get("out_probs", np.ones(len(masks))))
             gids = np.array([id_map[int(o)] for o in obj_ids.tolist()], dtype=np.int64)
 
-            packed[f"m{gframe}"] = np.packbits(masks, axis=-1)
+            # Cropped, not whole-frame: `packed` is held for the entire video and
+            # only written at the end, so full-frame packing cost ~1.1 MB a frame
+            # and got the 57k-frame run OOM-killed by the kernel at ~59 GB RSS.
+            packed[f"m{gframe}"], packed[f"c{gframe}"] = tv.pack_cropped(masks)
             packed[f"i{gframe}"] = gids
             packed[f"b{gframe}"] = boxes
             packed[f"p{gframe}"] = probs
@@ -208,7 +272,7 @@ def main() -> None:
                                  area, float(probs[i]), *np.asarray(boxes[i]).tolist()])
 
         # carry this chunk's tail forward as the next comparison window
-        prev_union = {}
+        old_union, prev_union = prev_union, {}
         for local_f in range(max(0, (hi - lo) - args.overlap), hi - lo):
             out = local_outputs.get(local_f)
             if out is None:
@@ -217,6 +281,14 @@ def main() -> None:
                 gid = id_map[int(oid)]
                 m = np.asarray(out["out_binary_masks"][i]).astype(bool)
                 prev_union[gid] = np.logical_or(prev_union[gid], m) if gid in prev_union else m
+
+        # An id that dropped out of the tail is remembered, not forgotten, so
+        # tier 2 can still claim it a few chunks from now.
+        for gid, m in old_union.items():
+            if gid not in prev_union:
+                retired[gid] = (mask_centroid(m), ci)
+        for gid in prev_union:
+            retired.pop(gid, None)
 
         done = len(written)
         rate = (hi - lo) / max(time.time() - t0, 1e-9)
@@ -237,6 +309,7 @@ def main() -> None:
 
     npz_path = args.out / "masks.npz"
     np.savez_compressed(npz_path, height=height, width=width,
+                        format=tv.MASK_FORMAT,
                         frames=np.array(sorted(written)), **packed)
     print(f"[masks] {len(written)} frames -> {npz_path} "
           f"({npz_path.stat().st_size / 1e6:.1f} MB)")

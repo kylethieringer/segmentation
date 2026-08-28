@@ -18,6 +18,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+from track_video import MASK_FORMAT
+
 # ColorBrewer Set1 + extensions: chosen to stay distinguishable from each other
 # AND from a grey backlit arena. Indexed by object id, so a fly keeps its colour
 # for the whole video.
@@ -29,18 +31,78 @@ PALETTE = [
 ]
 
 
-def load_masks(npz_path: Path):
-    """Unpack masks.npz -> {frame: (ids, masks[bool], boxes, probs)}."""
-    z = np.load(npz_path)
-    width = int(z["width"])
-    frames = z["frames"].tolist()
-    out = {}
-    for f in frames:
-        packed = z[f"m{f}"]
-        # packbits was applied along the last axis; unpack and trim the padding.
-        masks = np.unpackbits(packed, axis=-1).astype(bool)[..., :width]
-        out[f] = (z[f"i{f}"], masks, z[f"b{f}"], z[f"p{f}"])
-    return out, int(z["height"]), width
+class MaskStore:
+    """Lazy per-frame accessor for masks.npz.
+
+    Unpacked masks run ~9 MB a frame (7 objects at 1120x1120), so holding a
+    whole run in memory needs tens of GB and OOMs on anything untrided. Keep
+    the npz open and decompress one frame at a time instead.
+    """
+
+    def __init__(self, npz_path: Path):
+        self.z = np.load(npz_path)
+        self.height = int(self.z["height"])
+        self.width = int(self.z["width"])
+        self.frames = sorted(self.z["frames"].tolist())
+        # Runs tracked before cropped masks landed carry no format key.
+        self.format = int(self.z["format"]) if "format" in self.z else 1
+        if self.format > MASK_FORMAT:
+            raise SystemExit(f"{npz_path} is format {self.format}; this build reads "
+                             f"up to {MASK_FORMAT}. Update render_colors.py.")
+
+    def __len__(self) -> int:
+        return len(self.frames)
+
+    def __getitem__(self, f: int):
+        """-> (ids, masks[bool], boxes, probs) for one frame."""
+        packed = self.z[f"m{f}"]
+        if self.format == 1:
+            # Whole frames, packbits along the last axis: unpack and trim the padding.
+            masks = np.unpackbits(packed, axis=-1).astype(bool)[..., :self.width]
+        else:
+            masks = self._uncrop(packed, self.z[f"c{f}"])
+        return self.z[f"i{f}"], masks, self.z[f"b{f}"], self.z[f"p{f}"]
+
+    def _uncrop(self, packed: np.ndarray, crops: np.ndarray) -> np.ndarray:
+        """Paste format-2 bounding-box tiles back onto full frames.
+
+        Objects were padded to the largest box in the frame, so the tile width
+        is recoverable from `crops` alone. An object with an empty mask has an
+        all-zero crop row and contributes nothing.
+        """
+        masks = np.zeros((len(crops), self.height, self.width), dtype=bool)
+        if not len(crops):
+            return masks
+        tiles = np.unpackbits(packed, axis=-1).astype(bool)[..., :int(crops[:, 3].max())]
+        for i, (y0, x0, h, w) in enumerate(crops.tolist()):
+            if h:
+                masks[i, y0:y0 + h, x0:x0 + w] = tiles[i, :h, :w]
+        return masks
+
+
+def playback_fps(run_dir: Path) -> float | None:
+    """Real-time playback rate for the mask frames, from tracks.csv.
+
+    Deliberately frame/time_s and not src_frame/time_s: one rendered frame is
+    one *mask* frame, so a strided run plays back slower than its source. For
+    a 60 fps source this gives 60.0 unstrided and 20.0 at --stride 3; using
+    src_frame instead would run a strided render at 3x speed.
+    """
+    import csv as _csv
+    best = None
+    try:
+        with (run_dir / "tracks.csv").open() as fh:
+            for i, row in enumerate(_csv.DictReader(fh)):
+                if i >= 20000:
+                    break
+                # time_s is written to 6dp, so the ratio is only precise for a
+                # large frame index; keep the furthest row seen.
+                frame, t = int(row["frame"]), float(row["time_s"])
+                if t > 0 and (best is None or frame > best[0]):
+                    best = (frame, t)
+    except (OSError, KeyError, ValueError):
+        return None
+    return round(best[0] / best[1], 3) if best else None
 
 
 def open_frame_source(run_dir: Path, video: Path | None):
@@ -81,11 +143,14 @@ def open_frame_source(run_dir: Path, video: Path | None):
     return from_video
 
 
-def render(run_dir: Path, out_path: Path, alpha: float, fps: float,
+def render(run_dir: Path, out_path: Path, alpha: float, fps: float | None,
            trails: bool, labels: bool, outline: int, trail_len: int,
            video: Path | None) -> None:
     get_frame = open_frame_source(run_dir, video)
-    data, height, width = load_masks(run_dir / "masks.npz")
+    data = MaskStore(run_dir / "masks.npz")
+    height, width = data.height, data.width
+    if fps is None:
+        fps = playback_fps(run_dir) or 30.0
 
     trail_pts: dict[int, list[tuple[int, int]]] = defaultdict(list)
     # NOT in /tmp: ffmpeg here is a snap, and snaps get a private /tmp namespace,
@@ -97,7 +162,7 @@ def render(run_dir: Path, out_path: Path, alpha: float, fps: float,
     if not writer.isOpened():
         raise SystemExit("cv2.VideoWriter failed to open")
 
-    for fidx in sorted(data):
+    for fidx in data.frames:
         img = get_frame(fidx)
 
         obj_ids, masks, _boxes, probs = data[fidx]
@@ -164,7 +229,8 @@ def main() -> None:
     ap.add_argument("--video", type=Path, default=None,
                     help="source video, used when frames/ has been deleted")
     ap.add_argument("--alpha", type=float, default=0.65, help="mask fill opacity")
-    ap.add_argument("--fps", type=float, default=30.0, help="playback frame rate")
+    ap.add_argument("--fps", type=float, default=None,
+                    help="playback frame rate (default: the source video's, for real-time)")
     ap.add_argument("--trails", action="store_true", help="draw centroid motion trails")
     ap.add_argument("--trail-len", type=int, default=60,
                     help="trail length in frames; 0 for unbounded")
