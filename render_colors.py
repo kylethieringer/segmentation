@@ -5,7 +5,7 @@ Reads the masks.npz written by `track_video.py --save-masks`, so re-colouring
 never requires re-running the tracker.
 
 Example:
-    python render_colors.py runs/smoke_v3 --trails --out runs/smoke_v3/colored.mp4
+    python render_colors.py runs/smoke_v3 --trails --out runs/smoke_v3/smoke_v3_tracked.mp4
 """
 
 from __future__ import annotations
@@ -217,7 +217,7 @@ def render(run_dir: Path, out_path: Path, alpha: float, fps: float | None,
                     "-c:v", "libx264", "-pix_fmt", "yuv420p", str(out_path)],
                    check=True)
     tmp.unlink(missing_ok=True)
-    print(f"[colored] {len(data)} frames -> {out_path} "
+    print(f"[tracked] {len(data)} frames -> {out_path} "
           f"({out_path.stat().st_size / 1e6:.1f} MB)")
 
 
@@ -238,7 +238,9 @@ def main() -> None:
     ap.add_argument("--outline", type=int, default=2, help="contour thickness, 0 to disable")
     args = ap.parse_args()
 
-    out = args.out or (args.run_dir / "colored.mp4")
+    # Name the output after the run (and so after the source video), not a
+    # bare "tracked.mp4" -- these get moved and shared away from their dir.
+    out = args.out or (args.run_dir / f"{args.run_dir.resolve().name}_tracked.mp4")
     render(args.run_dir, out, args.alpha, args.fps, args.trails,
            not args.no_labels, args.outline, args.trail_len, args.video)
 

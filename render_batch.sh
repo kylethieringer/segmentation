@@ -6,7 +6,7 @@
 # (--video). Playback fps is left to render_colors.py, which infers the source
 # rate from tracks.csv — tracking ran unstrided, so these play in real time.
 #
-# Resumable — a run whose colored.mp4 exists is skipped.
+# Resumable — a run whose <run>_tracked.mp4 exists is skipped.
 #
 #   ./render_batch.sh                 # render (or resume) the whole batch
 #   DRY_RUN=1 ./render_batch.sh       # print the plan, render nothing
@@ -36,8 +36,8 @@ for masks in "${RUNS[@]}"; do
     video="$DATA/$day/$stem.mp4"
     log="$LOG_DIR/$day.$stem.render.log"
 
-    if [[ -f "$run/colored.mp4" ]]; then
-        say "[skip] $day/$stem already has colored.mp4"
+    if [[ -f "$run/${stem}_tracked.mp4" ]]; then
+        say "[skip] $day/$stem already has ${stem}_tracked.mp4"
         continue
     fi
     if [[ ! -f "$video" ]]; then
@@ -52,7 +52,7 @@ for masks in "${RUNS[@]}"; do
     fi
 
     if [[ -n "${DRY_RUN:-}" ]]; then
-        say "[dry-run] would render $day/$stem -> $run/colored.mp4"
+        say "[dry-run] would render $day/$stem -> $run/${stem}_tracked.mp4"
         continue
     fi
 
@@ -60,15 +60,15 @@ for masks in "${RUNS[@]}"; do
     start=$SECONDS
     uv run render_colors.py "$run" --video "$video" \
         --trails --trail-len "$TRAIL_LEN" \
-        --out "$run/colored.mp4" >>"$log" 2>&1
+        --out "$run/${stem}_tracked.mp4" >>"$log" 2>&1
     status=$?
     mins=$(( (SECONDS - start) / 60 ))
 
-    if (( status == 0 )) && [[ -f "$run/colored.mp4" ]]; then
-        say "[done] $day/$stem in ${mins}m — $(du -h "$run/colored.mp4" | cut -f1)"
+    if (( status == 0 )) && [[ -f "$run/${stem}_tracked.mp4" ]]; then
+        say "[done] $day/$stem in ${mins}m — $(du -h "$run/${stem}_tracked.mp4" | cut -f1)"
     else
         # Drop the half-written output so a rerun does not skip it.
-        rm -f "$run/colored.mp4" "$run/.colored.raw.mp4"
+        rm -f "$run/${stem}_tracked.mp4" "$run/.${stem}_tracked.raw.mp4"
         say "[FAIL] $day/$stem exit=$status after ${mins}m — see $log"
     fi
 done

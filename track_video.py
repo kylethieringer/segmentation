@@ -5,7 +5,7 @@ Stages:
   1. extract  decode a clip from the source video into <out>/frames/
   2. track    run the SAM 3.1 video predictor with a text prompt
   3. export   per-frame, per-object centroids/areas -> <out>/tracks.csv
-  4. render   annotated MP4 -> <out>/overlay.mp4
+  4. render   annotated MP4 -> <out>/<out-name>_overlay.mp4
 
 Written against a Drosophila arena assay (1120x1120 grayscale, 60 fps), but
 nothing here is species-specific -- --prompt drives what gets segmented.
@@ -403,7 +403,12 @@ def main() -> None:
         save_masks(outputs, args.out / "masks.npz", (height, width))
 
     if not args.no_render:
-        render(frame_paths, outputs, args.out / "overlay.mp4", out_fps)
+        # Named after the run rather than a bare "overlay.mp4": these get
+        # moved and shared away from the directory that identifies them.
+        # Kept as _overlay, not _tracked: render_colors.py writes
+        # <run>_tracked.mp4 into this same directory from masks.npz.
+        render(frame_paths, outputs,
+               args.out / f"{args.out.resolve().name}_overlay.mp4", out_fps)
 
 
 if __name__ == "__main__":
