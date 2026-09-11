@@ -19,9 +19,11 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import shutil
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -138,6 +140,10 @@ def main() -> None:
                     help="chunks an absent id stays relinkable; 0 disables relinking")
     ap.add_argument("--reuse-frames", action="store_true",
                     help="skip extraction if <out>/frames is already populated")
+    ap.add_argument("--expect-n", type=int, default=None,
+                    help="animals you expect per recording; warns per chunk when "
+                         "the count differs. Post-hoc only -- SAM 3's object cap "
+                         "is a sam3.1 knob and sam3.1 does not fit in 16 GB here.")
     cfgmod.add_config_arg(ap)
     cfgmod.apply_to(ap, cfgmod.load_config(cfgmod.preparse_config()),
                     "track", "subjects")
@@ -180,6 +186,7 @@ def main() -> None:
     prev_union: dict[int, np.ndarray] = {}   # global id -> mask union over last overlap
     retired: dict[int, tuple[tuple[float, float], int]] = {}   # gid -> (centroid, chunk last seen)
     chunk_dir = args.out / "_chunk"
+    objects_per_chunk: list[int] = []
     t_all = time.time()
 
     for ci, (lo, hi) in enumerate(bounds):
@@ -243,6 +250,14 @@ def main() -> None:
             if oid not in id_map:
                 id_map[oid] = next_gid
                 next_gid += 1
+
+        # A chunk that disagrees with the expected count is information, not a
+        # failure: it is usually one animal lost to a wall reflection for a few
+        # seconds, and the run is still worth finishing.
+        objects_per_chunk.append(len(id_map))
+        if args.expect_n is not None and len(id_map) != args.expect_n:
+            print(f"[warn] chunk {ci}: {len(id_map)} objects, expected {args.expect_n}",
+                  flush=True)
 
         # --- record frames this chunk owns (skip ones an earlier chunk wrote) ---
         for local_f in sorted(local_outputs):
@@ -317,6 +332,37 @@ def main() -> None:
                         frames=np.array(sorted(written)), **packed)
     print(f"[masks] {len(written)} frames -> {npz_path} "
           f"({npz_path.stat().st_size / 1e6:.1f} MB)")
+
+    # Provenance. Once defaults can come from a config file, the command line
+    # no longer records what a run did -- and the config file may have been
+    # edited since. This is what makes a run reproducible by someone whose
+    # config differs.
+    final_ids = len({row[3] for row in csv_rows})
+    meta = {
+        "video": str(args.video.resolve()),
+        "created": datetime.now().isoformat(timespec="seconds"),
+        "prompt": args.prompt,
+        "version": args.version,
+        "start": args.start,
+        "stride": args.stride,
+        "chunk": args.chunk,
+        "overlap": args.overlap,
+        "prob_thresh": args.prob_thresh,
+        "iou_thresh": args.iou_thresh,
+        "relink_dist": args.relink_dist,
+        "relink_chunks": args.relink_chunks,
+        "expect_n": args.expect_n,
+        "frames": n_frames,
+        "chunks": len(bounds),
+        "objects_per_chunk": objects_per_chunk,
+        "final_ids": final_ids,
+    }
+    meta_path = args.out / "run.json"
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n")
+    print(f"[meta] {meta_path}")
+    if args.expect_n is not None and final_ids != args.expect_n:
+        print(f"[warn] {final_ids} ids in the finished run, expected {args.expect_n}")
+
     print(f"[done] {n_frames} frames in {(time.time() - t_all) / 60:.1f} min")
 
 
