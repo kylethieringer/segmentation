@@ -210,6 +210,77 @@ def cmd_track(args: argparse.Namespace) -> None:
         raise SystemExit(1)
 
 
+# ---------------------------------------------------------------- render
+
+def cmd_render(args: argparse.Namespace) -> None:
+    """Overlay video for every run that tracked successfully.
+
+    A run counts as successful if it has masks.npz. cmd_track deletes frames/
+    on success, so each render decodes its pictures back out of the source
+    video (--video). Playback fps is left to render_colors.py, which infers the
+    source rate from tracks.csv.
+    """
+    rep = Reporter(args.out_dir / "_logs" / "render.log")
+    videos = discover(args.data_dir, args.extensions)
+    rep.say(f"[render] {len(videos)} videos, trail-len={args.trail_len}")
+
+    rows: list[tuple[str, str, int, int | None]] = []
+    aborted = False
+    for video in videos:
+        run = out_dir_for(video, args.data_dir, args.out_dir)
+        name = video.relative_to(args.data_dir).as_posix()
+        log = args.out_dir / "_logs" / (name.replace("/", ".") + ".render.log")
+        out = run / f"{run.name}_tracked.mp4"
+
+        if not (run / "masks.npz").is_file():
+            rep.say(f"[skip] {name} has no masks.npz — not tracked yet")
+            continue
+        if out.is_file():
+            rep.say(f"[skip] {name} already has {out.name}")
+            rows.append((name, "skip", 0, final_ids(run)))
+            continue
+
+        have = free_gb(args.out_dir)
+        if have < args.min_free_gb:
+            rep.say(f"[abort] only {have}G free, need {args.min_free_gb}G "
+                    f"— stopping before {name}")
+            aborted = True
+            break
+
+        if args.dry_run:
+            rep.say(f"[dry-run] would render {name} -> {out}")
+            continue
+
+        rep.say(f"[start] {name}  (log: {log})")
+        started = time.time()
+        argv = [str(run), "--video", str(video), "--out", str(out),
+                "--trail-len", str(args.trail_len), "--alpha", str(args.alpha),
+                "--outline", str(args.outline)]
+        if args.trails:
+            argv.append("--trails")
+        status = run_script("render_colors.py", argv, log)
+        mins = int((time.time() - started) / 60)
+
+        if status == 0 and out.is_file():
+            mb = out.stat().st_size / 1e6
+            rep.say(f"[done] {name} in {mins}m — {mb:.0f} MB")
+            rows.append((name, "ok", mins, final_ids(run)))
+        else:
+            # Drop the half-written output so a rerun does not skip it.
+            out.unlink(missing_ok=True)
+            (run / f".{run.name}_tracked.raw.mp4").unlink(missing_ok=True)
+            rep.say(f"[FAIL] {name} exit={status} after {mins}m — see {log}")
+            rows.append((name, "FAIL", mins, None))
+
+    if not args.dry_run:
+        summarise(rep, rows, args.expect_n)
+    rep.say("[render] finished")
+    # Propagate nonzero exit if the render was aborted early, mirroring
+    # cmd_track: the bash driver this replaced exited 1 here.
+    if aborted:
+        raise SystemExit(1)
+
+
 # ---------------------------------------------------------------- main
 
 def build_parser() -> tuple[argparse.ArgumentParser,
@@ -252,7 +323,21 @@ def build_parser() -> tuple[argparse.ArgumentParser,
     t.add_argument("--min-free-gb", type=int, default=40,
                    help="frames for the longest video need ~26 GB")
     t.set_defaults(func=cmd_track)
-    return ap, {"track": t}
+
+    r = sub.add_parser("render", help="render an overlay video for every run")
+    common(r)
+    r.add_argument("--trails", action="store_true", help="draw centroid motion trails")
+    r.add_argument("--no-trails", dest="trails", action="store_false",
+                   help="override trails = true from a config file")
+    r.add_argument("--trail-len", type=int, default=20,
+                   help="trail length in frames; 0 for unbounded")
+    r.add_argument("--alpha", type=float, default=0.65, help="mask fill opacity")
+    r.add_argument("--outline", type=int, default=2,
+                   help="contour thickness, 0 to disable")
+    r.add_argument("--min-free-gb", type=int, default=20,
+                   help="the mp4v intermediate is transient but not small")
+    r.set_defaults(func=cmd_render)
+    return ap, {"track": t, "render": r}
 
 
 def main() -> None:
