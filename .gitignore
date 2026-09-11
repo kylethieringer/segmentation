@@ -26,5 +26,8 @@ figures/
 make_figures.py
 build_report.py
 
+# Design specs and implementation plans: working notes, not part of the tool
+docs/superpowers/
+
 # IDE
 .idea/
