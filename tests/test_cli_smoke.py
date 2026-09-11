@@ -14,7 +14,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ["track_video.py", "track_long.py", "upsample_tracks.py",
-           "render_colors.py", "filter_tracks.py"]
+           "render_colors.py", "filter_tracks.py", "batch.py"]
 
 
 @pytest.mark.parametrize("script", SCRIPTS)

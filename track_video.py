@@ -377,7 +377,7 @@ def main() -> None:
     ap.add_argument("--min-area", type=int, default=150,
                     help="--no-model only: minimum blob area in px")
     cfgmod.add_config_arg(ap)
-    cfgmod.apply_to(ap, cfgmod.load_config(cfgmod.preparse_config()), "track")
+    cfgmod.apply_to(ap, cfgmod.load_config(cfgmod.preparse_config()), "track", "subjects")
     args = ap.parse_args()
 
     if not args.video.is_file():

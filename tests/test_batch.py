@@ -35,6 +35,18 @@ def test_extension_match_is_case_insensitive(tmp_path):
     assert len(batch.discover(tmp_path, [".mp4"])) == 1
 
 
+def test_excludes_out_dir_nested_inside_data_dir(tmp_path):
+    make(tmp_path, "a/1.mp4", "runs/a/1_tracked.mp4")
+    got = batch.discover(tmp_path, [".mp4"], exclude=tmp_path / "runs")
+    assert [p.relative_to(tmp_path).as_posix() for p in got] == ["a/1.mp4"]
+
+
+def test_exclude_of_a_nonexistent_directory_is_harmless(tmp_path):
+    make(tmp_path, "a/1.mp4")
+    got = batch.discover(tmp_path, [".mp4"], exclude=tmp_path / "runs")
+    assert [p.relative_to(tmp_path).as_posix() for p in got] == ["a/1.mp4"]
+
+
 def test_missing_data_dir_is_an_error(tmp_path):
     import pytest
     with pytest.raises(SystemExit):

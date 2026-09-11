@@ -98,6 +98,19 @@ def _validate(cfg: dict[str, dict[str, Any]], path: Path) -> None:
             known = ", ".join(sorted(SCHEMA[section]))
             raise SystemExit(f"[config] {path}: unknown key(s) in [{section}]: {bad}. "
                              f"Valid keys: {known}")
+        if section == "paths" and "extensions" in body:
+            # A bare string passes isinstance(x, list) here as False, which is
+            # exactly what we want to reject -- but it also passes as an
+            # iterable of characters, so a string that slipped through would
+            # get zipped apart into single-character "extensions" downstream
+            # and silently discover 0 videos. Bad config must be a hard error,
+            # never a silent no-op.
+            exts = body["extensions"]
+            if isinstance(exts, str) or not isinstance(exts, (list, tuple)) or \
+                    not all(isinstance(e, str) for e in exts):
+                raise SystemExit(
+                    f"[config] {path}: [paths] extensions must be a list of "
+                    f"strings, e.g. extensions = [\".mp4\", \".avi\"]; got {exts!r}")
 
 
 def _resolve_paths(cfg: dict[str, dict[str, Any]], base: Path) -> None:

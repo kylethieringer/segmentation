@@ -62,6 +62,23 @@ def test_absolute_path_left_alone(tmp_path):
     assert config.load_config(p)["paths"]["data_dir"] == Path("/srv/videos")
 
 
+def test_extensions_as_a_bare_string_is_rejected(tmp_path):
+    p = write(tmp_path, '[paths]\nextensions = ".mp4"\n')
+    with pytest.raises(SystemExit, match="extensions"):
+        config.load_config(p)
+
+
+def test_extensions_as_a_list_loads_fine(tmp_path):
+    p = write(tmp_path, '[paths]\nextensions = [".mp4", ".avi"]\n')
+    assert config.load_config(p)["paths"]["extensions"] == [".mp4", ".avi"]
+
+
+def test_extensions_with_a_non_string_element_is_rejected(tmp_path):
+    p = write(tmp_path, '[paths]\nextensions = [".mp4", 5]\n')
+    with pytest.raises(SystemExit, match="extensions"):
+        config.load_config(p)
+
+
 def test_nested_batch_sections_flattened(tmp_path):
     p = write(tmp_path, "[batch.track]\nmin_free_gb = 5\n[batch.render]\nmin_free_gb = 2\n")
     cfg = config.load_config(p)

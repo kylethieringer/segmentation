@@ -135,7 +135,7 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true",
                     help="report what would be dropped, write nothing")
     cfgmod.add_config_arg(ap)
-    cfgmod.apply_to(ap, cfgmod.load_config(cfgmod.preparse_config()), "filter")
+    cfgmod.apply_to(ap, cfgmod.load_config(cfgmod.preparse_config()), "filter", "subjects")
     args = ap.parse_args()
 
     for run in args.run_dir:

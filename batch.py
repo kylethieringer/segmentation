@@ -33,13 +33,22 @@ HERE = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------------- discovery
 
-def discover(data_dir: Path, extensions: list[str]) -> list[Path]:
-    """Every video under data_dir, at any depth, sorted for a stable order."""
+def discover(data_dir: Path, extensions: list[str],
+             exclude: Path | None = None) -> list[Path]:
+    """Every video under data_dir, at any depth, sorted for a stable order.
+
+    `exclude`, when given, is skipped entirely -- this is for out_dir when a
+    user nests it inside data_dir. Without it, every rendered video becomes a
+    new input on the next run, and each render adds more: the batch would
+    track and re-render its own output forever.
+    """
     if not data_dir.is_dir():
         raise SystemExit(f"[batch] no such data directory: {data_dir}")
     wanted = {e.lower() if e.startswith(".") else f".{e.lower()}" for e in extensions}
+    exclude_r = exclude.resolve() if exclude is not None else None
     found = [p for p in data_dir.rglob("*")
-             if p.is_file() and p.suffix.lower() in wanted]
+             if p.is_file() and p.suffix.lower() in wanted
+             and not (exclude_r is not None and p.resolve().is_relative_to(exclude_r))]
     return sorted(found)
 
 
@@ -124,7 +133,7 @@ def summarise(rep: Reporter, rows: list[tuple[str, str, int, int | None]],
 
 def cmd_track(args: argparse.Namespace) -> None:
     rep = Reporter(args.out_dir / "_logs" / "batch.log")
-    videos = discover(args.data_dir, args.extensions)
+    videos = discover(args.data_dir, args.extensions, exclude=args.out_dir)
     rep.say(f"[batch] {len(videos)} videos, prompt={args.prompt} stride={args.stride} "
             f"chunk={args.chunk} overlap={args.overlap}")
 
@@ -221,7 +230,7 @@ def cmd_render(args: argparse.Namespace) -> None:
     source rate from tracks.csv.
     """
     rep = Reporter(args.out_dir / "_logs" / "render.log")
-    videos = discover(args.data_dir, args.extensions)
+    videos = discover(args.data_dir, args.extensions, exclude=args.out_dir)
     rep.say(f"[render] {len(videos)} videos, trail-len={args.trail_len}")
 
     rows: list[tuple[str, str, int, int | None]] = []
@@ -256,8 +265,12 @@ def cmd_render(args: argparse.Namespace) -> None:
         argv = [str(run), "--video", str(video), "--out", str(out),
                 "--trail-len", str(args.trail_len), "--alpha", str(args.alpha),
                 "--outline", str(args.outline)]
-        if args.trails:
-            argv.append("--trails")
+        # Always pass trails explicitly. batch.py does not forward --config, and
+        # render_colors.py independently loads ./segmentation.toml -- if that file
+        # sets trails = true, an omitted flag is not "unset", it is the child's
+        # own config-derived default, which is True. Only an explicit
+        # --trails/--no-trails can override it.
+        argv.append("--trails" if args.trails else "--no-trails")
         status = run_script("render_colors.py", argv, log)
         mins = int((time.time() - started) / 60)
 
@@ -296,6 +309,15 @@ def build_parser() -> tuple[argparse.ArgumentParser,
     sub = ap.add_subparsers(dest="command", required=True)
 
     def common(p: argparse.ArgumentParser) -> None:
+        # Declared here too (not via add_config_arg) so --config also works after
+        # the subcommand, which is where most people reach for it. default must be
+        # SUPPRESS, not None: argparse copies every subparser attribute onto the
+        # main namespace, and a plain None default would clobber a value already
+        # set by --config on the root parser. preparse_config() scans the whole
+        # argv regardless of position, so the file is found either way -- this is
+        # only about argparse accepting and advertising the flag here too.
+        p.add_argument("--config", type=Path, default=argparse.SUPPRESS,
+                       help="TOML config file (also accepted before the subcommand)")
         p.add_argument("--data-dir", type=Path, default=None,
                        help="root searched recursively for videos")
         p.add_argument("--out-dir", type=Path, default=None,

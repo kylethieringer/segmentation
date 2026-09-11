@@ -85,6 +85,13 @@ folder of videos works the same way. A video whose `tracks.csv` already exists
 is skipped, so the batch can be killed and restarted. It ends with a table
 flagging every recording whose track count differs from `expect_n`.
 
+Discovery matches every file under `data_dir` with a configured extension, at
+any depth. `out_dir` is skipped automatically even when it is nested inside
+`data_dir`. Rendered videos left loose in `data_dir` are not: they have the
+same extension as a recording, so they get picked up as new inputs on the
+next run. Keep outputs out of the data directory, or narrow `extensions` to
+exclude them.
+
 | Script | Does |
 |---|---|
 | `batch.py` | Tracks or renders a whole folder, one video at a time. **Use this for more than one recording.** |
