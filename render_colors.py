@@ -18,6 +18,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+import config as cfgmod
 from track_video import MASK_FORMAT
 
 # ColorBrewer Set1 + extensions: chosen to stay distinguishable from each other
@@ -232,10 +233,14 @@ def main() -> None:
     ap.add_argument("--fps", type=float, default=None,
                     help="playback frame rate (default: the source video's, for real-time)")
     ap.add_argument("--trails", action="store_true", help="draw centroid motion trails")
+    ap.add_argument("--no-trails", dest="trails", action="store_false",
+                    help="override trails = true from a config file")
     ap.add_argument("--trail-len", type=int, default=60,
                     help="trail length in frames; 0 for unbounded")
     ap.add_argument("--no-labels", action="store_true")
     ap.add_argument("--outline", type=int, default=2, help="contour thickness, 0 to disable")
+    cfgmod.add_config_arg(ap)
+    cfgmod.apply_to(ap, cfgmod.load_config(cfgmod.preparse_config()), "render")
     args = ap.parse_args()
 
     # Name the output after the run (and so after the source video), not a

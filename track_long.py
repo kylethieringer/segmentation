@@ -27,6 +27,7 @@ from pathlib import Path
 import numpy as np
 from scipy.optimize import linear_sum_assignment
 
+import config as cfgmod
 import track_video as tv
 
 
@@ -137,6 +138,9 @@ def main() -> None:
                     help="chunks an absent id stays relinkable; 0 disables relinking")
     ap.add_argument("--reuse-frames", action="store_true",
                     help="skip extraction if <out>/frames is already populated")
+    cfgmod.add_config_arg(ap)
+    cfgmod.apply_to(ap, cfgmod.load_config(cfgmod.preparse_config()),
+                    "track", "subjects")
     args = ap.parse_args()
 
     if args.overlap >= args.chunk:

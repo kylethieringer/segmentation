@@ -24,6 +24,8 @@ import numpy as np
 import pandas as pd
 from scipy.interpolate import Akima1DInterpolator, CubicSpline, PchipInterpolator, interp1d
 
+import config as cfgmod
+
 # Position columns get the chosen (shape-preserving) interpolator; these get plain
 # linear treatment -- they are noisy per-frame measurements, not smooth trajectories,
 # so a fancier fit would imply precision that is not there.
@@ -81,6 +83,10 @@ def main() -> None:
                     help="interpolator for cx/cy (default pchip: smooth, cannot overshoot)")
     ap.add_argument("--fps", type=float, default=None,
                     help="source fps for the time_s column; inferred if omitted")
+    cfgmod.add_config_arg(ap)
+    # No section of its own: the flag is declared for uniformity, so every
+    # script in the pipeline takes --config whether or not it reads anything.
+    cfgmod.apply_to(ap, cfgmod.load_config(cfgmod.preparse_config()))
     args = ap.parse_args()
 
     df = pd.read_csv(args.tracks_csv)

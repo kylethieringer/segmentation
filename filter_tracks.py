@@ -31,6 +31,8 @@ from pathlib import Path
 
 import numpy as np
 
+import config as cfgmod
+
 # Per-frame keys written by track_long.py, all indexed by object within a frame.
 OBJECT_KEYS = ("m", "c", "i", "b", "p")
 FRAME_COL, ID_COL = 0, 3
@@ -82,6 +84,8 @@ def main() -> None:
                     help="filter tracks.csv only, leaving masks.npz stale")
     ap.add_argument("--dry-run", action="store_true",
                     help="report what would be dropped, write nothing")
+    cfgmod.add_config_arg(ap)
+    cfgmod.apply_to(ap, cfgmod.load_config(cfgmod.preparse_config()), "filter")
     args = ap.parse_args()
 
     for run in args.run_dir:
