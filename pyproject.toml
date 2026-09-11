@@ -1,5 +1,5 @@
 [project]
-name = "fly-arena-segmentation"
+name = "segmentation"
 version = "0.1.0"
 description = "Segment and track individual flies in a Drosophila arena recording with SAM 3"
 readme = "README.md"
