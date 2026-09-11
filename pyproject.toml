@@ -1,5 +1,5 @@
 [project]
-name = "fly-arena-segmentation"
+name = "segmentation"
 version = "0.1.0"
 description = "Segment and track individual flies in a Drosophila arena recording with SAM 3"
 readme = "README.md"
@@ -46,6 +46,7 @@ dev = [
     "ipywidgets",
     "ipympl",     # sam3's interactive example notebooks
     "ipycanvas",
+    "pytest>=8",
 ]
 
 [tool.uv]
@@ -72,3 +73,6 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools]
 # Flat layout: the pipeline is top-level scripts, not an importable package.
 py-modules = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

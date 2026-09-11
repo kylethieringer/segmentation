@@ -30,26 +30,101 @@ The checkpoints are gated. Request access to
 uv run hf auth login
 ```
 
+## Configure
+
+Every setting is a command-line flag, and a config file only changes what
+those flags default to:
+
+```
+CLI flag  >  segmentation.toml  >  built-in default
+```
+
+```bash
+cp segmentation.example.toml segmentation.toml   # then edit it
+```
+
+`segmentation.toml` is found in the current directory, or named explicitly with
+`--config PATH`. It is optional — without one, every script behaves exactly as
+its `--help` describes. Relative paths inside it resolve against the file's own
+directory, so the same config works from anywhere. An unknown section or key is
+an error rather than a silent no-op, which is what catches typos.
+
+The three settings most people need to change are in `[paths]` (`data_dir`,
+`out_dir`) and `[subjects]` (`expect_n`).
+
 ## Pipeline
+
+One recording:
 
 ```bash
 # 1. track (chunked; handles arbitrarily long video)
-uv run track_long.py test_video.mp4 --prompt insect --stride 3 \
-    --chunk 450 --overlap 15 --out runs/full_s3
+uv run track_long.py recording.mp4 --out runs/rec1
 
-# 2. fill in the frames skipped by --stride
-uv run upsample_tracks.py runs/full_s3/tracks.csv --kind pchip
+# 2. drop short-lived spurious tracks
+uv run filter_tracks.py runs/rec1 --dry-run    # check first
+uv run filter_tracks.py runs/rec1 --backup runs/superseded
 
-# 3. render a video, one colour per fly
-uv run render_colors.py runs/full_s3 --fps 20 --trails
+# 3. fill in the frames skipped by --stride (skip if stride is 1)
+uv run upsample_tracks.py runs/rec1/tracks.csv --kind pchip
+
+# 4. render a video, one colour per fly
+uv run render_colors.py runs/rec1 --trails
 ```
+
+A folder of recordings, tracked one at a time and resumable:
+
+```bash
+uv run batch.py track --dry-run    # print the plan
+uv run batch.py track              # run it
+uv run batch.py render             # overlay video for every finished run
+```
+
+`batch.py` searches `data_dir` recursively and mirrors what it finds into
+`out_dir`, so `<data>/30_7_26/CS_T5.mp4` produces `<out>/30_7_26/CS_T5/`. A flat
+folder of videos works the same way. A video whose `tracks.csv` already exists
+is skipped, so the batch can be killed and restarted. It ends with a table
+flagging every recording whose track count differs from `expect_n`.
+
+Discovery matches every file under `data_dir` with a configured extension, at
+any depth. `out_dir` is skipped automatically even when it is nested inside
+`data_dir`. Rendered videos left loose in `data_dir` are not: they have the
+same extension as a recording, so they get picked up as new inputs on the
+next run. Keep outputs out of the data directory, or narrow `extensions` to
+exclude them.
 
 | Script | Does |
 |---|---|
+| `batch.py` | Tracks or renders a whole folder, one video at a time. **Use this for more than one recording.** |
 | `track_video.py` | Single-session tracking. Fine up to ~500 frames; the building block for `track_long.py`. |
 | `track_long.py` | Chunked tracking with IoU identity stitching across chunk seams. **Use this for real runs.** |
+| `filter_tracks.py` | Drops short-lived spurious ids from `tracks.csv` and `masks.npz`. |
 | `upsample_tracks.py` | Interpolates strided tracks back to every source frame. |
 | `render_colors.py` | Renders `masks.npz` to a video with one stable colour per object. |
+
+## Adapting to your own recordings
+
+**Prompt.** Try two or three wordings on one recording before starting a batch;
+see the note below on how much the wording matters. `--prompt` takes any
+open-vocabulary noun, so nothing here is *Drosophila*-specific.
+
+**Expected count.** `expect_n` (or `--expect-n`) is a post-hoc expectation, not
+an instruction to the model: SAM 3's object cap is a `sam3.1` knob, and `sam3.1`
+does not fit in 16 GB at this resolution. It warns per chunk when the live
+object count differs, flags finished runs whose id count differs, and tells
+`filter_tracks.py` to keep the N longest-lived ids.
+
+**Stride.** `1` tracks every frame. Higher values trade temporal resolution for
+speed and are recoverable with `upsample_tracks.py` to well under a pixel on
+this assay — validate that on your own footage before relying on it.
+
+**Chunk size.** This is a VRAM knob first: lower it if you hit CUDA OOM. It also
+selects *how* identity stitching fails at a seam, so do not tune it on speed
+alone. Larger chunks mean fewer seams but a longer absence per missed one, so a
+subject lost for a whole chunk comes back beyond IoU range and is handed a new
+id — one animal, two ids. Smaller chunks double the seams but nothing is ever
+gone long enough to split, at the cost of more short-lived stubs. Splits are
+recoverable with `--relink-dist`/`--relink-chunks`; stubs are not, but
+`filter_tracks.py` removes them by lifetime.
 
 ### Outputs
 
@@ -95,6 +170,23 @@ Bit-packed per-frame masks plus ids, boxes and scores, so a run can be re-render
 without re-tracking. Keys are `m{frame}`, `i{frame}`, `b{frame}`, `p{frame}`, plus
 `height`, `width` and `frames`. Unpack with
 `np.unpackbits(z[f"m{i}"], axis=-1)[..., :width]`.
+
+#### `run.json`
+
+Every setting the run actually used, plus its object counts. Once defaults can
+come from a config file, the command line no longer records what a run did —
+and the config may have been edited since — so this is what makes a run
+reproducible by someone whose config differs.
+
+| Key | Meaning |
+|---|---|
+| `video`, `created` | Absolute source path and run timestamp |
+| `prompt`, `version`, `start`, `stride`, `chunk`, `overlap` | Settings used |
+| `prob_thresh`, `iou_thresh`, `relink_dist`, `relink_chunks` | Thresholds used |
+| `expect_n` | The expected animal count, or `null` |
+| `frames`, `chunks` | Frames tracked and chunks they were split into |
+| `objects_per_chunk` | Live object count per chunk — where a subject was lost |
+| `final_ids` | Distinct `obj_id` values in `tracks.csv` |
 
 ## Things that cost time to discover
 

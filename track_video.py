@@ -31,6 +31,8 @@ from pathlib import Path
 
 import numpy as np
 
+import config as cfgmod
+
 
 # ---------------------------------------------------------------- stage 1
 
@@ -374,6 +376,8 @@ def main() -> None:
                     help="--no-model only: cap on blobs per frame")
     ap.add_argument("--min-area", type=int, default=150,
                     help="--no-model only: minimum blob area in px")
+    cfgmod.add_config_arg(ap)
+    cfgmod.apply_to(ap, cfgmod.load_config(cfgmod.preparse_config()), "track", "subjects")
     args = ap.parse_args()
 
     if not args.video.is_file():

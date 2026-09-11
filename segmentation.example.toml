@@ -1,0 +1,52 @@
+# Copy to segmentation.toml and edit. Every value here is a default: any flag
+# you pass on the command line still wins, and deleting a key just restores
+# the script's built-in default.
+#
+# Relative paths resolve against THIS FILE's directory, not your shell's.
+
+[paths]
+# Searched recursively, at any depth. The structure under data_dir is mirrored
+# into out_dir: <data_dir>/30_7_26/CS_T5.mp4 -> <out_dir>/30_7_26/CS_T5/
+data_dir = "~/recordings"
+out_dir = "runs/batch"
+extensions = [".mp4"]
+
+[subjects]
+# How many animals are in each recording. Used to flag runs that came out with
+# a different number of tracks, and by filter_tracks.py to keep the N
+# longest-lived ids. Delete the key to switch every such check off.
+expect_n = 7
+
+# Prompt wording matters more than it should: "insect" scores 0.94 on this
+# assay while "fly" scores 0.56-0.60 and returns nothing from the video model.
+# Try a few on one recording before committing to a batch.
+prompt = "insect"
+
+[track]
+# sam3, not sam3.1 -- 3.1 needs ~14.6 GiB in the detector mask head alone and
+# will not fit in 16 GB at this resolution.
+version = "sam3"
+stride = 1
+# Frames per session. Raise it for fewer seams, lower it if you hit CUDA OOM.
+chunk = 450
+overlap = 15
+prob_thresh = 0.5
+iou_thresh = 0.3
+relink_dist = 200.0
+relink_chunks = 3
+
+[render]
+trails = true
+trail_len = 20
+alpha = 0.65
+outline = 2
+
+[filter]
+min_fraction = 0.5
+
+[batch.track]
+retry_chunk = 225    # second attempt for a video that OOMs the GPU at chunk
+min_free_gb = 40     # extracted frames for the longest video need ~26 GB
+
+[batch.render]
+min_free_gb = 20     # the mp4v intermediate is transient but not small

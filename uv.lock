@@ -365,64 +365,6 @@ wheels = [
 ]
 
 [[package]]
-name = "fly-arena-segmentation"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "decord" },
-    { name = "einops" },
-    { name = "matplotlib" },
-    { name = "numpy" },
-    { name = "opencv-python" },
-    { name = "pandas" },
-    { name = "pillow" },
-    { name = "pycocotools" },
-    { name = "sam3" },
-    { name = "scikit-image" },
-    { name = "scikit-learn" },
-    { name = "scipy" },
-    { name = "setuptools" },
-    { name = "torch" },
-    { name = "torchvision" },
-    { name = "tqdm" },
-]
-
-[package.optional-dependencies]
-dev = [
-    { name = "ipycanvas" },
-    { name = "ipympl" },
-    { name = "ipywidgets" },
-    { name = "jupyter" },
-    { name = "notebook" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "decord", specifier = ">=0.6" },
-    { name = "einops", specifier = ">=0.7" },
-    { name = "ipycanvas", marker = "extra == 'dev'" },
-    { name = "ipympl", marker = "extra == 'dev'" },
-    { name = "ipywidgets", marker = "extra == 'dev'" },
-    { name = "jupyter", marker = "extra == 'dev'" },
-    { name = "matplotlib", specifier = ">=3.8" },
-    { name = "notebook", marker = "extra == 'dev'" },
-    { name = "numpy", specifier = ">=1.26,<2" },
-    { name = "opencv-python", specifier = ">=4.9" },
-    { name = "pandas", specifier = ">=2" },
-    { name = "pillow", specifier = ">=10" },
-    { name = "pycocotools", specifier = ">=2.0" },
-    { name = "sam3", git = "https://github.com/facebookresearch/sam3.git?rev=8f0b7f4d4e7eda2ed606ebde6702c93359ad01da" },
-    { name = "scikit-image", specifier = ">=0.22" },
-    { name = "scikit-learn", specifier = ">=1.3" },
-    { name = "scipy", specifier = ">=1.11" },
-    { name = "setuptools", specifier = "<81" },
-    { name = "torch", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cu128" },
-    { name = "torchvision", index = "https://download.pytorch.org/whl/cu128" },
-    { name = "tqdm" },
-]
-provides-extras = ["dev"]
-
-[[package]]
 name = "fonttools"
 version = "4.63.0"
 source = { registry = "https://pypi.org/simple" }
@@ -562,6 +504,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/48/62/aa770a9307508d2a2a2c62d536a49347bffe9e55322db27838d3c93d0b07/imageio-2.37.4.tar.gz", hash = "sha256:e45cbc5e83502047fb138f7f585f7f105a136a57eea5f4b3cfc6ce1b52720bd3", size = 390173, upload-time = "2026-07-20T05:26:11.369Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/3e/2d/ca050652104bab2cf55e569db2a178b1b61cb041fef28307f2db383f6d9f/imageio-2.37.4-py3-none-any.whl", hash = "sha256:1ab2e22c8debf700f24c3ac43e8f95f3b3a8110c83b93411e97b4b0b2cd1c7e6", size = 318000, upload-time = "2026-07-20T05:26:09.874Z" },
+]
+
+[[package]]
+name = "iniconfig"
+version = "2.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/72/34/14ca021ce8e5dfedc35312d08ba8bf51fdd999c576889fc2c24cb97f4f10/iniconfig-2.3.0.tar.gz", hash = "sha256:c76315c77db068650d49c5b56314774a7804df16fee4402c1f19d6d15d8c4730", size = 20503, upload-time = "2025-10-18T21:55:43.219Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cb/b1/3846dd7f199d53cb17f49cba7e651e9ce294d8497c8c150530ed11865bb8/iniconfig-2.3.0-py3-none-any.whl", hash = "sha256:f631c04d2c48c52b84d0d0549c99ff3859c98df65b3101406327ecc7d53fbf12", size = 7484, upload-time = "2025-10-18T21:55:41.639Z" },
 ]
 
 [[package]]
@@ -1498,6 +1449,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pluggy"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
+]
+
+[[package]]
 name = "portalocker"
 version = "4.3.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1604,6 +1564,22 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f3/91/9c6ee907786a473bf81c5f53cf703ba0957b23ab84c264080fb5a450416f/pyparsing-3.3.2.tar.gz", hash = "sha256:c777f4d763f140633dcb6d8a3eda953bf7a214dc4eff598413c070bcdc117cbc", size = 6851574, upload-time = "2026-01-21T03:57:59.36Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/10/bd/c038d7cc38edc1aa5bf91ab8068b63d4308c66c4c8bb3cbba7dfbc049f9c/pyparsing-3.3.2-py3-none-any.whl", hash = "sha256:850ba148bd908d7e2411587e247a1e4f0327839c40e2e5e6d05a007ecc69911d", size = 122781, upload-time = "2026-01-21T03:57:55.912Z" },
+]
+
+[[package]]
+name = "pytest"
+version = "9.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "iniconfig" },
+    { name = "packaging" },
+    { name = "pluggy" },
+    { name = "pygments" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e4/47/b9efed96c114afcfa3c9d3fe98a76a1d14c74a9e266d397cf6eb64be5e01/pytest-9.1.1.tar.gz", hash = "sha256:1088fbde8f2b49d95a549a195707afa7a76a3ce9bcadc26b6d71f0ffda5fe313", size = 1636369, upload-time = "2026-06-19T10:58:32.857Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/24/25/1de2678b631f5a49215c6c96fff41ba892b0a34df68d6d80292b1b48aa7f/pytest-9.1.1-py3-none-any.whl", hash = "sha256:37a86b45efb9a47a61a36449063e8e18d0cab3161329fc099eb21783169c4f0c", size = 386536, upload-time = "2026-06-19T10:58:31.347Z" },
 ]
 
 [[package]]
@@ -1892,6 +1868,66 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/84/dc08d77fbf3d87d3ee27f6a0c6dcce1de5829a64f2eae85a0ecc1f0daa73/scipy-1.17.1-cp312-cp312-win_amd64.whl", hash = "sha256:41b71f4a3a4cab9d366cd9065b288efc4d4f3c0b37a91a8e0947fb5bd7f31d87", size = 36549682, upload-time = "2026-02-23T00:19:07.67Z" },
     { url = "https://files.pythonhosted.org/packages/bc/98/fe9ae9ffb3b54b62559f52dedaebe204b408db8109a8c66fdd04869e6424/scipy-1.17.1-cp312-cp312-win_arm64.whl", hash = "sha256:f4115102802df98b2b0db3cce5cb9b92572633a1197c77b7553e5203f284a5b3", size = 24547340, upload-time = "2026-02-23T00:19:12.024Z" },
 ]
+
+[[package]]
+name = "segmentation"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "decord" },
+    { name = "einops" },
+    { name = "matplotlib" },
+    { name = "numpy" },
+    { name = "opencv-python" },
+    { name = "pandas" },
+    { name = "pillow" },
+    { name = "pycocotools" },
+    { name = "sam3" },
+    { name = "scikit-image" },
+    { name = "scikit-learn" },
+    { name = "scipy" },
+    { name = "setuptools" },
+    { name = "torch" },
+    { name = "torchvision" },
+    { name = "tqdm" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "ipycanvas" },
+    { name = "ipympl" },
+    { name = "ipywidgets" },
+    { name = "jupyter" },
+    { name = "notebook" },
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "decord", specifier = ">=0.6" },
+    { name = "einops", specifier = ">=0.7" },
+    { name = "ipycanvas", marker = "extra == 'dev'" },
+    { name = "ipympl", marker = "extra == 'dev'" },
+    { name = "ipywidgets", marker = "extra == 'dev'" },
+    { name = "jupyter", marker = "extra == 'dev'" },
+    { name = "matplotlib", specifier = ">=3.8" },
+    { name = "notebook", marker = "extra == 'dev'" },
+    { name = "numpy", specifier = ">=1.26,<2" },
+    { name = "opencv-python", specifier = ">=4.9" },
+    { name = "pandas", specifier = ">=2" },
+    { name = "pillow", specifier = ">=10" },
+    { name = "pycocotools", specifier = ">=2.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
+    { name = "sam3", git = "https://github.com/facebookresearch/sam3.git?rev=8f0b7f4d4e7eda2ed606ebde6702c93359ad01da" },
+    { name = "scikit-image", specifier = ">=0.22" },
+    { name = "scikit-learn", specifier = ">=1.3" },
+    { name = "scipy", specifier = ">=1.11" },
+    { name = "setuptools", specifier = "<81" },
+    { name = "torch", specifier = "==2.10.0", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "torchvision", index = "https://download.pytorch.org/whl/cu128" },
+    { name = "tqdm" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "send2trash"
