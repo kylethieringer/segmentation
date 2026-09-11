@@ -4,6 +4,9 @@ __pycache__/
 *.pyc
 *.egg-info/
 
+# Local configuration; segmentation.example.toml is the committed reference.
+segmentation.toml
+
 # Third-party source, cloned not vendored (see README for the clone command)
 sam3/
 
