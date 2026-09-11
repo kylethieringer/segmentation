@@ -9,26 +9,105 @@ is species-specific — `--prompt` drives what gets segmented.
 
 **! code was written with help from claude**
 
-## Setup
+## Setup from scratch
 
-Requires an NVIDIA GPU (CUDA 12.6+) and [uv](https://docs.astral.sh/uv/). Everything
-else — the Python interpreter, torch, and SAM 3 itself — is resolved from `uv.lock`:
+Written for Linux with an NVIDIA GPU. Other platforms are untested: there is no
+CUDA path on Apple silicon, and nothing here has been run under WSL.
+
+Budget about **11 GB of disk** — ~7.7 GB for the environment and ~3.3 GB for the
+model checkpoints — and expect the Hugging Face access request in step 4 to take
+anywhere from minutes to a day to be approved.
+
+### 1. System prerequisites
 
 ```bash
-uv sync                  # the pipeline
-uv sync --extra dev      # ...plus jupyter, for sam3's own example notebooks
+nvidia-smi          # should print your GPU and driver; if not, install the driver first
+ffmpeg -version     # needed by render_colors.py, which shells out to it
+git --version
 ```
 
-SAM 3 is installed from a pinned commit rather than vendored, so no manual clone is
-needed. To read or modify its source, clone it and swap the `[tool.uv.sources]` entry
-in `pyproject.toml` for `sam3 = { path = "sam3", editable = true }`.
+You need a **16 GB GPU or larger** at this resolution, CUDA **12.6+**, and
+`ffmpeg` on `PATH`. `ffmpeg` is a system package (`apt install ffmpeg`), not a
+Python dependency, so `uv sync` will not supply it — without it, tracking
+succeeds and only rendering fails.
 
-The checkpoints are gated. Request access to
-[facebook/sam3](https://huggingface.co/facebook/sam3), then:
+Do not install a system Python for this. Triton JIT-compiles a CUDA helper at
+runtime and needs `Python.h`; the uv-managed interpreter in step 2 ships the
+headers, while a bare `python3.12` needs `python3.12-dev`.
+
+### 2. Install uv
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Then restart your shell, or `source $HOME/.local/bin/env`.
+
+### 3. Clone and install
+
+```bash
+git clone https://github.com/kylethieringer/segmentation.git
+cd segmentation
+uv sync                  # the pipeline
+uv sync --extra dev      # ...plus pytest and jupyter, for the tests and sam3's notebooks
+```
+
+This resolves the Python interpreter, torch, and SAM 3 from `uv.lock`. SAM 3 is
+installed from a pinned commit rather than vendored, so no manual clone is
+needed. To read or modify its source, clone it and swap the `[tool.uv.sources]`
+entry in `pyproject.toml` for `sam3 = { path = "sam3", editable = true }`.
+
+Check the install without touching the GPU:
+
+```bash
+uv run --extra dev pytest      # 50 tests
+uv run batch.py track --help
+```
+
+### 4. Get access to the SAM 3 checkpoints
+
+The weights are gated, so this cannot be automated:
+
+1. Create an account at [huggingface.co](https://huggingface.co/join).
+2. Go to [facebook/sam3](https://huggingface.co/facebook/sam3) and accept the
+   terms to request access. **Wait for the approval email** — the next step
+   fails until it arrives.
+3. Create a token at
+   [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
+   A **read** token is enough.
+4. Log in with it:
 
 ```bash
 uv run hf auth login
 ```
+
+Nothing is downloaded yet. The checkpoint (~3.3 GB) is fetched on your **first
+tracking run**, not during `uv sync`, and cached under `~/.cache/huggingface`
+— set `HF_HOME` to move that. So an auth or access problem surfaces partway
+into the first run rather than at install time.
+
+### 5. First real run
+
+Point it at any recording you have. This tracks 60 frames, which is enough to
+prove the checkpoint download, the GPU path, and video decoding all work:
+
+```bash
+uv run track_video.py YOUR_VIDEO.mp4 --version sam3 --prompt insect \
+    --frames 60 --out runs/smoke
+```
+
+Pass `--version sam3` explicitly: the built-in default is `sam3.1`, which will
+not fit in 16 GB at this resolution (see *Things that cost time to discover*).
+A `runs/smoke/tracks.csv` with a handful of distinct `obj_id` values means the
+install is good.
+
+If the prompt finds nothing, try another wording before assuming the install is
+broken — `insect` works where `fly` returns zero. The same section explains why.
+
+### 6. Configure it for your own data
+
+Set `data_dir`, `out_dir` and `expect_n` as described under **Configure** below,
+then use `batch.py` for anything more than one recording.
 
 ## Configure
 
