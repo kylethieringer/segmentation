@@ -129,6 +129,7 @@ def cmd_track(args: argparse.Namespace) -> None:
             f"chunk={args.chunk} overlap={args.overlap}")
 
     rows: list[tuple[str, str, int, int | None]] = []
+    aborted = False
     for video in videos:
         out = out_dir_for(video, args.data_dir, args.out_dir)
         name = video.relative_to(args.data_dir).as_posix()
@@ -144,6 +145,7 @@ def cmd_track(args: argparse.Namespace) -> None:
         if have < args.min_free_gb:
             rep.say(f"[abort] only {have}G free, need {args.min_free_gb}G "
                     f"— stopping before {name}")
+            aborted = True
             break
 
         if args.dry_run:
@@ -201,6 +203,11 @@ def cmd_track(args: argparse.Namespace) -> None:
     if not args.dry_run:
         summarise(rep, rows, args.expect_n)
     rep.say("[batch] finished")
+    # Propagate nonzero exit if the batch was aborted early. The bash driver this
+    # replaced exited 1 here, so a wrapper watching the exit code can tell a
+    # truncated batch from a complete one.
+    if aborted:
+        raise SystemExit(1)
 
 
 # ---------------------------------------------------------------- main
